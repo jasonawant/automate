@@ -1,0 +1,91 @@
+<?php
+/**
+ * @file
+ *
+ * Automate module.
+ */
+
+/**
+ * Webform values
+ *
+ * Take webform form values and collapse form values into key value pairs.
+ *
+ * @param $form
+ * @param $form_state
+ *
+ * @return array
+ *   Return an array of key => value.
+ */
+function automate_webform_values($form, $form_state) {
+  $result = array();
+
+  if (!empty($form_state['webform'])) {
+    foreach ($form_state['webform']['component_tree']['children'] as $key => $value) {
+      if (isset($form_state['values']['submitted'][$key])) {
+        $form_tree[$value['form_key']] = $form_state['values']['submitted'][$key];
+      }
+    }
+  }
+  else {
+    $form_tree = $form_state['values']['submitted'];
+  }
+
+  _automate_form_collapse_form($form_tree, $form_state['values']['submitted'], $form['submitted'], $result);
+
+  return $result;
+}
+
+/**
+ * Helper function to recurse through posted webform.
+ *
+ * @param array $tree
+ *   The post tree name => value pairs.
+ * @param array $posted_values
+ *   The post tree, could be name => value pairs or index => value pairs.
+ * @param array $form
+ *   The actual form structure of the form.
+ * @param array $result
+ *   Return by reference re-structured tree that modules will leverage.
+ *
+ * @see _pardot_form_collapse()
+ */
+function _automate_form_collapse_form($tree, $posted_values, $form, &$result) {
+  foreach ($tree as $name => $value) {
+    // Expand things in fieldsets.
+    if (is_array($value) && !in_array($value, $posted_values)) {
+      _pardot_form_collapse_form($value, $posted_values, $form[$name], $result);
+    }
+    // Convert multi-value fields into strings.
+    elseif (is_array($value)) {
+      // If it looks like a date, and the year is reasonable then use slashes
+      // 0-1-2 = M/D/Y
+      if ((count($value) == 3)
+        && ($value[2] > 1900) && ($value[2] < 2100)
+        && (checkdate($value[0], $value[1], $value[2]))) {
+        $result[$name] = implode('/', $value);
+      }
+      else {
+        $result[$name] = implode(',', $value);
+      }
+    }
+    // Everything else is just passed along.
+    elseif ($form[$name]['#type'] == 'select') {
+      // Map select values to text versions. The numeric values won't mean
+      // much to Pardot, CRM or any other integration.
+      $result[$name] = $form[$name]['#options'][$value];
+    }
+    // If this is an address field.
+    elseif (!empty($form[$name]['#addressfield'])) {
+      if ($address = unserialize($value)) {
+        foreach ($address as $address_field => $address_field_value) {
+          if (empty($result[$address_field])) {
+            $result[$address_field] = $address_field_value;
+          }
+        }
+      }
+    }
+    else {
+      $result[$name] = $value;
+    }
+  }
+}
