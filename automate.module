@@ -241,11 +241,15 @@ function _automate_visibility_roles($user, $module) {
 /**
  * Automate form tracking settings.
  *
- * @param array $form
  * @param string $module
  *   Module key name.
+ *
+ * @return array
+ *   $form element.
  */
-function automate_form_tracking(&$form, $module) {
+function automate_form_tracking($module) {
+  $form = array();
+
   $form['tracking'] = array(
     '#type' => 'vertical_tabs',
     '#weight' => 2,
@@ -331,6 +335,8 @@ function automate_form_tracking(&$form, $module) {
     '#options' => $role_options,
     '#description' => t('If none of the roles are selected, all users will be tracked. If a user has any of the roles checked, that user will be tracked (or excluded, depending on the setting above).'),
   );
+
+  return $form;
 }
 
 /**
@@ -347,7 +353,7 @@ function automate_map_webform_values($form_values, $field_mappings) {
 
   // Map fields to their appropriate values.
   foreach ($form_values as $key => $value) {
-    if (!empty($field_mappings[$key])) {
+    if (!empty($field_mappings[$key]['key'])) {
       $result[$field_mappings[$key]['key']] = $value;
     }
     else {
@@ -356,4 +362,60 @@ function automate_map_webform_values($form_values, $field_mappings) {
   }
 
   return $result;
+}
+
+/**
+ * Automate get password.
+ *
+ * @param string $password
+ *   Encrypted password.
+ * @param boolean $decrypt
+ *   Decrypt password returned if TRUE.
+ *
+ * @return string
+ *   Unencrypted password.
+ */
+function automate_get_password($password, $decrypt = TRUE) {
+  // If mcrypt is being used we need to decrypt the password.
+  if ($password AND function_exists('mcrypt_encrypt') AND $decrypt) {
+    $key = drupal_substr(drupal_get_hash_salt(), 0, 32);
+    $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
+    $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
+    $ciphertext_dec = base64_decode($password);
+    $plaintext_dec = mcrypt_decrypt(MCRYPT_RIJNDAEL_256, $key, $ciphertext_dec, MCRYPT_MODE_ECB, $iv);
+
+    return rtrim($plaintext_dec, "\0");
+  }
+  elseif ($password) {
+    return $password;
+  }
+  else {
+    return '';
+  }
+}
+
+/**
+ * Automate Set Password.
+ *
+ * @param string $password
+ *
+ * @return string
+ *   Encrypted password.
+ */
+function automate_set_password($password = '') {
+  // If mcrypt is available we will encrypt the password in the database.
+  if ($password AND function_exists('mcrypt_encrypt')) {
+    $key = drupal_substr(drupal_get_hash_salt(), 0, 32);
+    $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
+    $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
+    $ciphertext = mcrypt_encrypt(MCRYPT_RIJNDAEL_256, $key, $password, MCRYPT_MODE_ECB, $iv);
+    $ciphertext_base64 = base64_encode($ciphertext);
+
+    // Store encrypted password.
+    return $ciphertext_base64;
+  }
+  // Otherwise it will be in plain text
+  elseif ($password) {
+    return $password;
+  }
 }
