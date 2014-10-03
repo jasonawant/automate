@@ -80,7 +80,8 @@ function _automate_form_collapse_form($tree, $posted_values, $form, &$result) {
       if ($address = unserialize($value)) {
         foreach ($address as $address_field => $address_field_value) {
           if (empty($result[$address_field])) {
-            $result[$address_field] = $address_field_value;
+            // Prefix with the name to allow for multuple address fields.
+            $result[$name . '_' . $address_field] = $address_field_value;
           }
         }
       }
@@ -356,7 +357,7 @@ function automate_map_webform_values($form_values, $field_mappings) {
     if (!empty($field_mappings[$key]['key'])) {
       $result[$field_mappings[$key]['key']] = $value;
     }
-    else {
+    elseif (!empty($result[$key])) {
       $result[$key] = $value;
     }
   }
